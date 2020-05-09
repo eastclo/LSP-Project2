@@ -96,7 +96,7 @@ void mntr_files(char *path, FILE *fp, Llist* list)
 		if (list->cur == NULL) //cur == NULL이면 childPath추가
 			add_list(fp, list, childPath);	
 		else if (strcmp(list->cur->file_name, childPath) == 0) {//리스트에 이미 있으면 수정시간만 확인 
-			if (list->cur->mtime != statbuf.st_mtime) { //수정시간이 다를 경우 
+			if (list->cur->mtime != statbuf.st_mtime && list->cur->mtime < statbuf.st_mtime) { //수정시간이 다를 경우 
 				list->cur->mtime = statbuf.st_mtime; //수정 시간 변경 
 				write_log(fp, list->cur, MODIFY); //로그 기록 
 				list->cur->mtime = statbuf.st_mtime; //리스트 갱신 
@@ -134,13 +134,13 @@ void write_log(FILE *fp, node *file, int status)
 
 	switch (status) {
 		case ADD: //추가
-			sprintf(buf, "[%d-%d-%d %d:%d:%d][create_%s]\n", now->tm_year+1900, now->tm_mon+1, now->tm_mday+1, now->tm_hour, now->tm_min, now->tm_sec, fileName);
+			sprintf(buf, "[%d-%02d-%02d %02d:%02d:%02d][create_%s]\n", now->tm_year+1900, now->tm_mon+1, now->tm_mday+1, now->tm_hour, now->tm_min, now->tm_sec, fileName);
 			break;
 		case MODIFY: //수정
-			sprintf(buf, "[%d-%d-%d %d:%d:%d][modify_%s]\n", now->tm_year+1900, now->tm_mon+1, now->tm_mday+1, now->tm_hour, now->tm_min, now->tm_sec, fileName);
+			sprintf(buf, "[%d-%02d-%02d %02d:%02d:%02d][modify_%s]\n", now->tm_year+1900, now->tm_mon+1, now->tm_mday+1, now->tm_hour, now->tm_min, now->tm_sec, fileName);
 			break;
 		case DELETE: //삭제
-			sprintf(buf, "[%d-%d-%d %d:%d:%d][delete_%s]\n", now->tm_year+1900, now->tm_mon+1, now->tm_mday+1, now->tm_hour, now->tm_min, now->tm_sec, fileName);
+			sprintf(buf, "[%d-%02d-%02d %02d:%02d:%02d][delete_%s]\n", now->tm_year+1900, now->tm_mon+1, now->tm_mday+1, now->tm_hour, now->tm_min, now->tm_sec, fileName);
 			break;
 	}
 
@@ -183,14 +183,14 @@ void add_list(FILE *fp, Llist* list, char *fname)
 		tmp->prev = NULL;
 		tmp->next = NULL;
 		list->head = tmp;
-		list->tail = tmp->next;
+		list->tail = tmp;
 	}
-	else if (list->cur == NULL) { //list->cur가 tail일 경우
-		node *prev_file = list->cur->prev;	
+	else if (list->cur == NULL) { //tail에 추가 해야하는 경우
+		node *prev_file = list->tail;	
 		prev_file->next = tmp;
 		tmp->prev = prev_file;
 		tmp->next = NULL;
-		list->tail = tmp->next;
+		list->tail = tmp;
 	}
 	else if(list->cur->prev == NULL) { //list->cur가 head일 경우
 		tmp->next = list->cur;
