@@ -1,11 +1,22 @@
 #ifndef DAEMON_H_
 #define DAEMON_H_
 
-#define BUFLEN 1024
-#define FILELEN 256 
-#define PATHLEN 512 
-#define true 1
-#define false 0
+#ifndef true
+    #define true 1
+#endif
+#ifndef false
+    #define false 0
+#endif
+#ifndef BUFLEN
+    #define BUFLEN 1024
+#endif
+#ifndef FILELEN
+    #define FILELEN 256
+#endif
+#ifndef PATHLEN
+    #define PATHLEN 512 
+#endif
+
 #define ADD 2
 #define MODIFY 3
 #define DELETE 4

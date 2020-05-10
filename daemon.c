@@ -115,6 +115,10 @@ void mntr_files(char *path, FILE *fp, Llist* list)
 		if (S_ISDIR(statbuf.st_mode)) //디렉토리면 재귀
 			mntr_files(childPath, fp, list);  
 	}  
+
+	for(i = 0; i < nitems; i++)
+		free(items[i]);
+	free(items);
 }
 
 void write_log(FILE *fp, node *file, int status)
