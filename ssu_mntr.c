@@ -288,8 +288,31 @@ void cmd_size(int argc, char *argv[]) //크기 명령어 실행
 	print_size(path, 0, limit);
 }
 
-int get_directory_size(char *path)
+int get_directory_size(char *path) //path 디렉토리 하위 파일의 합을 리턴
 {
+	struct stat statbuf;
+	struct dirent **items;
+	int nitems, i;
+	size_t ret = 0;
+	
+	nitems = scandir(path, &items, NULL, alphasort); //내부 파일 목록 가져오기
+
+	for (i = 0; i < nitems; i++) {
+		char childPath[PATHLEN];
+
+		if ((!strcmp(items[i]->d_name, ".")) || (!strcmp(items[i]->d_name, "..")))
+			continue;
+
+		sprintf(childPath, "%s/%s", path, items[i]->d_name);
+		lstat(childPath, &statbuf);
+		
+		if (S_ISDIR(statbuf.st_mode))
+			ret += get_directory_size(childPath); //디렉토리면 재귀의 리턴 값
+		else
+			ret += statbuf.st_size; //디렉토리가 아니면 파일 자체의 사이즈
+	}
+
+	return ret;
 }
 
 void cmd_recover(int argc, char *argv[]) //복구 명령어 실행
@@ -321,9 +344,7 @@ void print_tree(char *path, int depth) //디렉토리 순회
 		if ((!strcmp(items[i]->d_name, ".")) || (!strcmp(items[i]->d_name, ".."))) //현재, 부모디렉토리 제외
 			continue;
 
-		strcpy(childPath, path); 
-		strcat(childPath, "/"); 
-		strcat(childPath, items[i]->d_name);
+		sprintf(childPath, "%s/%s", path, items[i]->d_name);
 		lstat(childPath, &statbuf);
 
 		for(j = 0; j < depth; j++) //구조 출력
@@ -360,10 +381,12 @@ void print_size(char *path, int depth, int limit) //디렉토리 순회
 		strcpy(childPath, path); strcat(childPath, "/"); strcat(childPath, items[i]->d_name);
 		lstat(childPath, &statbuf);
 
-		printf("%ld\t%s\n", statbuf.st_size, childPath); //size 출력
-
-		if (S_ISDIR(statbuf.st_mode))  //디렉토리면 재귀
+		if (S_ISDIR(statbuf.st_mode)) {  //디렉토리면 재귀
+			printf("%ld\t%s\n", get_directory_size(childPath), childPath); //디렉토리는 하위 파일의 합 출력
 			print_size(childPath, depth + 1, limit);
+		}
+		else //파일일 경우 그냥 출력 
+			printf("%ld\t%s\n", statbuf.st_size, childPath); //size 출력
 	}
 
 	for(i = 0; i < nitems; i++)
