@@ -29,11 +29,13 @@ int execute_command(int argc, char *argv[]); //명령어 구분하여 각각의 
 void cmd_help(); //명령어 사용법 출력
 
 void cmd_delete(int argc, char *argv[]); //삭제 명령어 실행
-void delete_file(int signo); //alarm에 의한 삭제 시그널 핸들러, 전역변수에 저장한 파일을 삭제한다
+void sig_delete(int signo); //alarm에 의한 삭제 시그널 핸들러, delete_file()호출
+void delete_file(void); //전역변수에 저장한 파일을 삭제한다
 int ask_delete(void); //delete r옵션시 삭제 질문, y면 true, n은 false리턴
 int get_file_count(char *fname); //trash에 fname포함하여 같은 파일 개수 리턴
-int is_info_full(void); //info에 2kb이상이면 true리턴
+int is_info_full(void); //info 폴더가 2kb이상이면 true리턴
 void erase_old_trash(void); //가장 오래된 trash 1개 삭제
+void rmdirs(const char *path); //디렉토리 삭제 함수
 unsigned int get_timer(char *date, char *clock); //현재시간과 입력시간의 차이 리턴
 
 void cmd_size(int argc, char *argv[]); //크기 명령어 실행

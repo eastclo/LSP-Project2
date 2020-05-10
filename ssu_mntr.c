@@ -11,17 +11,18 @@
 #include <sys/types.h>
 #include "ssu_mntr.h"
 
-char mntrDir[PATHLEN]; //모니터링 디렉토리 절대경로
 char mntrName[FILELEN] = "check"; //모니터링 디렉토리 이름
+char mntrDir[PATHLEN]; //모니터링 디렉토리 절대경로
 char startDir[PATHLEN]; //시작 디렉토리 절대경로
-char delFile[PATHLEN]; //삭제 명령어에 사용
-char delTime[20]; //삭제 명령어에 사용
 char trashfilesDir[PATHLEN]; //trash에 files디렉토리
 char trashinfoDir[PATHLEN]; //trash에 info디렉토리
 char trashDir[PATHLEN];
 
-int ioption;
-int roption;
+char delFile[PATHLEN]; //삭제 명령어에 사용
+char delTime[20]; //삭제 명령어에 사용
+
+int ioption; //삭제 i옵션
+int roption; //삭제 r옵션
 
 void ssu_mntr()
 {
@@ -33,15 +34,10 @@ void ssu_mntr()
 
 	//전역변수 초기화
 	getcwd(startDir, PATHLEN);
-	getcwd(mntrDir, PATHLEN);
-	getcwd(trashfilesDir, PATHLEN);
-	getcwd(trashinfoDir, PATHLEN);
-	getcwd(trashDir, PATHLEN);
-	strcat(mntrDir, "/"); 
-	strcat(mntrDir, mntrName); 
-	strcat(trashDir, "/trash");
-	strcat(trashfilesDir, "/trash/files");
-	strcat(trashinfoDir, "/trash/info");
+	sprintf(mntrDir, "%s/%s", startDir, mntrName);
+	sprintf(trashDir, "%s/%s", startDir, "/trash");
+	sprintf(trashfilesDir, "%s/%s", trashDir, "/files");
+	sprintf(trashinfoDir, "%s/%s", trashDir, "/info");
 
 	if (access(mntrDir, F_OK) < 0) {
 		mkdir(mntrDir, 0755);	
@@ -129,7 +125,7 @@ void cmd_delete(int argc, char *argv[]) //삭제 명령어 실행
 		return;
 	}
 
-	signal(SIGALRM, delete_file);
+	signal(SIGALRM, sig_delete);
 
 	if (argc >= 4) {
 		//TODO:반복문으로 인자 날짜형식인지 검사, argc == 3일 때 옵션부터해야하는데...
@@ -150,7 +146,10 @@ void cmd_delete(int argc, char *argv[]) //삭제 명령어 실행
 		}
 	}
 
-	alarm(timer); //삭제
+	if (timer > 0)
+		alarm(timer); //삭제
+	else
+
 }
 
 unsigned int get_timer(char *date, char *clock)
@@ -173,7 +172,12 @@ unsigned int get_timer(char *date, char *clock)
 	return mktime(&set) - nowTime; //현재시간부터 입력시간까지의 초 리턴
 }
 
-void delete_file(int signo)
+void sig_delete(int signo) //alarm에 의한 삭제 시그널 핸들러, delete_file()호출
+{
+	delete_file();
+}
+
+void delete_file(void)
 {
 	struct tm *now;
 	struct stat statbuf;
@@ -220,8 +224,8 @@ void delete_file(int signo)
 			return;
 		}
 
-		//		while (is_info_full() > 0) //info가 2kb이상이면
-		//			erase_old_trash(); //files와 info에 오래된 파일 1개 삭제
+		while (is_info_full() > 0) //info가 2kb이상이면
+			erase_old_trash(); //files와 info에 오래된 파일 1개 삭제
 	}
 }
 
@@ -252,24 +256,99 @@ int get_file_count(char *fname) //trash에 fname포함하여 같은 파일 개�
 	count = 1;
 	for (i = 1; i <= nitems; i++) {
 		memset(trash, 0, PATHLEN);
-		sprintf(trash, "%s/%d_%s", trashfilesDir, i, fname);
+		sprintf(trash, "%s/%d_%s", trashfilesDir, i, fname); //fname의 각 번호가 붙은 파일이 존재하는지
 		if (access(trash, F_OK) == 0)
 			count++;
 	}
 	
+	for(i = 0; i < nitems; i++)
+		free(items[i]);
+	free(items);
+
 	return count;
 }
 
-int is_info_full(void)
+int is_info_full(void) //info폴더가 2kb이상이면 true리턴 
 {
-	if(get_directory_size(delFile) < 2048)
+	if(get_directory_size(trashinfoDir) < 2048)
 		return false;
 	return true;
 }
 
-void erase_old_trash(void)
+void erase_old_trash(void) //info에서 가장 오래된 파일을 찾아 files와 info 둘다 삭제
 {
+	char files[PATHLEN];
+	char info[PATHLEN];
+	char fname[FILELEN];
+    struct stat statbuf;
+    struct dirent **items;
+    int nitems, i;
+	time_t oldest;
+        
+    nitems = scandir(path, &items, NULL, alphasort); //내부 파일 목록 가져오기
 
+	oldest = time(NULL); //현재시간으로 초기화
+    for (i = 0; i < nitems; i++) {
+        char childPath[PATHLEN];
+
+        if ((!strcmp(items[i]->d_name, ".")) || (!strcmp(items[i]->d_name, "..")))
+            continue;
+
+        sprintf(childPath, "%s/%s", trashinfoDir, items[i]->d_name); 
+        lstat(childPath, &statbuf);
+    
+		if (oldeast > statbuf.st_mtime) {	 //파일 수정시간이 저장된 시간보다 오래될 경우
+			oldeast = statbuf.st_mtime; //해당 파일 시간 저장
+			strcpy(fname, items[i]->d_name); //해당 파일 이름 저장
+			fname[strlen(items[i]->d_name)] = 0; //마지막에 NULL삽입
+		}	
+    }
+
+	//가장 오래된 파일인 fname을 삭제
+	sprintf(info, "%s/%s", trashinfoDir, fname);
+	sprintf(files, "%s/%s", trashfilesDir, fname);
+
+	unlink(info); //info파일은 텍스트 파일이므로 바로 삭제
+
+	lstat(files, &statbuf);
+	if (S_ISDIR(statbuf.st_mode)) //file 파일이 디렉토리일 경우
+		rmdirs(files); //디렉토리 삭제 함수 호출
+	else
+		unlink(files);
+
+	for(i = 0; i < nitems; i++)
+		free(items[i]);
+	free(items);
+}
+
+void rmdirs(const char *path) //디렉토리 삭제 함수
+{ //rmdir은 빈 디렉토리를 삭제. 이 함수는 비어있지 않은 디렉토리도 삭제한다.
+	struct dirent *dirp;
+	struct stat statbuf;
+	DIR *dp;
+	char tmp[PATHLEN];
+
+	if((dp = opendir(path)) == NULL) //디렉토리 오픈
+		return;
+
+	while((dirp = readdir(dp)) != NULL) //해당 디렉토리 내부 파일들을 가져온다.
+	{
+		if(!strcmp(dirp->d_name, ".") || !strcmp(dirp->d_name, "..")) //.과 ..은 제외
+			continue;
+
+		sprintf(tmp, "%s/%s", path, dirp->d_name);
+
+		if(lstat(tmp, &statbuf) == -1) //해당 파일 자체를 삭제하기 위해 lstat사용
+			continue;
+
+		if(S_ISDIR(statbuf.st_mode)) //디렉토리면 재귀호출로 처리
+			rmdirs(tmp);
+		else
+			unlink(tmp); //일반 파일이면 바로 삭제
+	}
+
+	closedir(dp);
+	rmdir(path);
 }
 
 void cmd_size(int argc, char *argv[]) //크기 명령어 실행
@@ -311,6 +390,10 @@ int get_directory_size(char *path) //path 디렉토리 하위 파일의 합을 �
 		else
 			ret += statbuf.st_size; //디렉토리가 아니면 파일 자체의 사이즈
 	}
+
+	for(i = 0; i < nitems; i++)
+		free(items[i]);
+	free(items);
 
 	return ret;
 }
