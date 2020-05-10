@@ -80,7 +80,7 @@ void mntr_files(char *path, FILE *fp, Llist* list)
 {
 	struct stat statbuf;
 	struct dirent **items;
-	int nitems, i, j;
+	int nitems, i;
 
 	nitems = scandir(path, &items, NULL, alphasort); //알파벳 순서로 items에 저장
 
