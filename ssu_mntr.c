@@ -18,7 +18,7 @@ char trashfilesDir[PATHLEN]; //trash에 files디렉토리
 char trashinfoDir[PATHLEN]; //trash에 info디렉토리
 char trashDir[PATHLEN];
 
-char delFile[PATHLEN]; //삭제 명령어에 사용
+char delFile[FILELEN]; //삭제 명령어에 사용, 삭제 대상 파일명
 
 int ioption; //삭제 i옵션
 int roption; //삭제 r옵션
@@ -27,8 +27,8 @@ void ssu_mntr()
 {
 	char command[BUFLEN];
 	char *prompt = "20162444>";
-	char **argv;
-	int argc, cmd;
+	char *argv[7];
+	int argc, cmd, i;
 	pid_t pid;
 
 	//전역변수 초기화
@@ -40,8 +40,8 @@ void ssu_mntr()
 
 	if (access(mntrDir, F_OK) < 0) {
 		mkdir(mntrDir, 0755);	
-		//		if ((pid = fork()) == 0)  //최초 실행시 모니터링을 위한 디몬 프로세스 실행
-		//		execl("./daemon", "./daemon", (char*)0); //디몬 실행
+//		if ((pid = fork()) == 0)  //최초 실행시 모니터링을 위한 디몬 프로세스 실행
+//		execl("./daemon", "./daemon", (char*)0); //디몬 실행
 	}
 	if (access(trashDir, F_OK) < 0) 
 		mkdir(trashDir, 0755);
@@ -51,17 +51,27 @@ void ssu_mntr()
 		mkdir(trashinfoDir, 0755);
 
 	while (1) {
+		memset(command, 0, BUFLEN);
 		argc = 0;
 		fputs(prompt, stdout);
 		fgets(command, sizeof(command), stdin);
 
+		if(command[0] == '\n')
+			continue;
+
 		argv[++argc] = strtok(command, " ");
-		while ((argv[++argc] = strtok(NULL, " ")) != NULL);  //입력받은 문자를 공백기준으로 나누기
+		while ((argv[++argc] = strtok(NULL, " ")) != NULL)  //입력받은 문자를 공백기준으로 나누기
+			if (argc == 6) { //최대 인자 5개
+				fprintf(stderr, "argument error\n");
+				cmd_help();
+				continue;
+			}
+
 		rtrim(argv[--argc]); //마지막에 개행문자 제거
 
 		if((cmd = execute_command(argc, argv)) < 0)
 			break;
-		else if(cmd == 0) //이외의 명령어는 help
+		else if(cmd == 0)  //이외의 명령어는 help
 			cmd_help();
 	}
 
@@ -81,7 +91,6 @@ void rtrim(char *_str)
 	*start = 0;  //공백문자 제거
 }
 
-//TODO: 명령어 인자 에러 처리
 int execute_command(int argc, char *argv[]) //명령어 구분하여 각각의 명령어 실행함수 호출
 {
 	int i;
@@ -103,11 +112,24 @@ int execute_command(int argc, char *argv[]) //명령어 구분하여 각각의 �
 
 void cmd_help(void) //명령어 사용법 출력
 {
-	printf("도움!\n");
+	printf("usage:\n\n");
+	printf("delete [FILENAME] [END_TIME] [OPTION] : FILENAME 삭제\n");
+	printf("- FILENAME : 절대경로, 상대경로 가능\n");
+	printf("- END_TIME : yyyy-mm-dd hh:mm\n");
+	printf("- OPTION : -i, -r //둘 중 하나만 사용 가능\n\n");
+	printf("size [FILENAME] [OPTION] : FILENAME 이하 파일 경로와 크기\n");
+	printf("- FILENAME : 상대경로만 가능\n");
+	printf("- OPTION : -d NUMBER //NUMBER는 자연수\n\n");
+	printf("recover [FILENAME] [OPTION] : FILENAME 파일 복구\n");
+	printf("- FILENAME : 파일명(경로x)\n");
+	printf("- OPTION : -l //모든 파일 중 선택\n\n");
+	printf("tree : 파일 구조 출력\n\n");
+	printf("exit : 프로그램 종료\n\n");
 }
 
 void cmd_delete(int argc, char *argv[]) //삭제 명령어 실행
 {
+	char delFilePath[PATHLEN];
 	unsigned int timer;
 
 	memset(delFile, 0, sizeof(delFile)); //전역변수 초기화
@@ -117,17 +139,37 @@ void cmd_delete(int argc, char *argv[]) //삭제 명령어 실행
 		return;
 	}
 
-	sprintf(delFile, "%s/%s", mntrDir, argv[2]); //삭제할 파일의 절대경로 저장
+	strcpy(delFile, argv[2]); //전역변수에 파일명 저장
+	if (delFile[0] != '/') //절대 경로가 아니면
+		sprintf(delFilePath, "%s/%s", mntrDir, delFile); //삭제할 파일의 절대경로 저장
+	else
+		strcpy(delFilePath, delFile);
 
-	if (access(delFile, F_OK) < 0) { //2번 째 인자 파일명 잘못된 경우 에러메시지
-		fprintf(stderr, "%s isn't exit", delFile);
+	if (access(delFilePath, F_OK) < 0) { //2번 째 인자 파일명 잘못된 경우 에러메시지
+		fprintf(stderr, "%s isn't exit\n", delFilePath);
 		return;
 	}
 
 	signal(SIGALRM, sig_delete);
 
+	if (argc == 3 && argc == 5) {
+		int idx = argc;
+		if(strcmp(argv[idx], "-i") == 0) //-i옵션일 경우 전역변수에 옵션 저장
+			ioption = true;
+		if(strcmp(argv[idx], "-r") == 0) //-r옵션일 경우 전역변수에 옵션 저장
+			roption = true;
+		else { //옵션인자에 그 외 명령어가 들어가면 에러
+			fprintf(stderr, "option error\n");
+			cmd_help();
+			return;
+		}
+	}
+
 	if (argc >= 4) {
-		//TODO:반복문으로 인자 날짜형식인지 검사, argc == 3일 때 옵션부터해야하는데...
+		if(check_time(argv[3], argv[4]) == false) {//인자 날짜형식인지 검사
+			fprintf(stderr, "날짜 형식이 맞지 않습니다.\n");
+			return;
+		}
 		if ((timer = get_timer(argv[3], argv[4])) < 0) {
 			fprintf(stderr, "현재시간보다 과거의 시간 예약은 불가능합니다.\n");
 			return;
@@ -136,32 +178,73 @@ void cmd_delete(int argc, char *argv[]) //삭제 명령어 실행
 	else
 		timer = 0;
 
-	if (argc == 5) {
-		if(strcmp(argv[5], "-i") == 0) //-i옵션일 경우 전역변수에 옵션 저장
-			ioption = true;
-		if(strcmp(argv[5], "-r") == 0) //-r옵션일 경우 전역변수에 옵션 저장
-			roption = true;
-		else { //옵션인자에 그 외 명령어가 들어가면 에러
-			cmd_help();
-			return;
-		}
-	}
-
 	if (timer > 0)
 		alarm(timer); //삭제예약
 	else
 		delete_file(); //시간설정 없을 시 바로 삭제
 }
 
+int check_time(char *date, char *clock)	//yyyy-mm-dd hh-mm 형식이 맞는지 확인
+{
+	char ytmp[10]={0}, montmp[10]={0}, dtmp[10]={0}, htmp[10]={0}, mintmp[10]={0};
+	int i, cnt = 0;
+	//날짜 형식:숫자 조합과 -가 2개 있는지 확인
+	for (i = 0; i < strlen(date); i++) { 
+		if(('0' <= date[i] && date[i] <= '9') || date[i] == '-') {
+			if(date[i] == '-')
+				++cnt;
+		}
+		else
+			return false;
+	}
+	if(cnt != 2) 
+		return false;
+
+	//시간 형식:숫자 조합과 :가 1개 있는지 확인
+	cnt = 0;
+	for (i = 0; i < strlen(clock); i++) {
+		if(('0' <= clock[i] && clock[i] <= '9') || clock[i] == ':') {
+			if(clock[i] == ':')
+				++cnt;
+		}
+		else
+			return false;
+	}
+	if(cnt != 1)
+		return false;
+	
+	sscanf(date, "%[^-]%*c%[^-]%*c%s", ytmp, montmp, dtmp);
+	sscanf(clock, "%[^:]%*c%s%*c", htmp, mintmp);
+
+	if (atoi(montmp) < 1 &&  12 < atoi(montmp))
+		return false;
+	if (atoi(dtmp) < 1 &&  31 < atoi(dtmp))
+		return false;
+	if (atoi(htmp) < 0 &&  23 < atoi(htmp))
+		return false;
+	if (atoi(mintmp) < 0 &&  59 < atoi(mintmp))
+		return false;
+	
+	return true;
+}
+
 int get_timer(char *date, char *clock) //현재시간과 입력시간의 차이 리턴
 {
-	char ytmp[10], montmp[10], dtmp[10], htmp[10], mintmp[10], stmp[10];
+	char ytmp[10]={0}, montmp[10]={0}, dtmp[10]={0}, htmp[10]={0}, mintmp[10]={0}, stmp[10]={0};
 	struct tm set = {0};
 	time_t nowTime;
+	int i, cnt = 0;
 
 	nowTime = time(NULL);
 	sscanf(date, "%[^-]%*c%[^-]%*c%s", ytmp, montmp, dtmp);
-	sscanf(clock, "%[^:]%*c%[^:]%*c%s", htmp, mintmp, stmp);
+
+	for(i = 0; i < strlen(clock); i++)
+		if(clock[i] == ':')
+			cnt++;
+	if(cnt == 1)
+		sscanf(clock, "%[^:]%*c%s%*c", htmp, mintmp);
+	else if(cnt == 2)
+		sscanf(clock, "%[^:]%*c%[^:]%*c%s", htmp, mintmp, stmp);
 
 	set.tm_year = atoi(ytmp) - 1900;
 	set.tm_mon = atoi(montmp) - 1;
@@ -180,52 +263,60 @@ void sig_delete(int signo) //alarm에 의한 삭제 시그널 핸들러, delete_
 
 void delete_file(void) //삭제명령어, 전역변수에 저장한 파일을 삭제한다
 {
-	struct tm *modi;
-	struct tm *now;
+	struct tm modi;
+	struct tm now;
 	struct stat statbuf;
-	FILE *fp;
 	time_t nowTime;
+	char infoFile[PATHLEN] ={0};
+	char trashFile[PATHLEN] = {0};
+	char delFilePath[PATHLEN] = {0};
+	char fname[FILELEN]; //삭제할 파일명
+	char *end;
+	FILE *fp;
 	int num;
-	char delFileName[FILELEN];
-	char infoFile[PATHLEN];
-	char trashFile[PATHLEN];
-	char *nameP = delFile + strlen(delFile) - 1;
+
+	if (roption && ask_delete() == false) //r옵션 있을 경우 삭제 질문
+		return;
 
 	nowTime = time(NULL); //현재 시간 기록
-	now = localtime(&nowTime);
+	localtime_r(&nowTime, &now);
 
-	while (*(nameP-1) != '/')
-		--nameP; //파일 이름만 추출
+	//삭제할 파일 경로 저장
+	if(delFile[0] != '/') 
+		sprintf(delFilePath, "%s/%s", mntrDir, delFile);
+	else
+		strcpy(delFilePath, delFile);
 
-	num = get_file_count(trashfilesDir, nameP);//trash에 nameP와 같은 파일 개수 리턴 
-	sprintf(delFileName, "%d_%s", num, nameP); 
-	lstat(delFile, &statbuf);
+	end = delFile + strlen(delFile) - 1;
+	while (end != delFile && *(end-1) != '/') 
+		--end;
+	strcpy(fname, end);	
 
-	if (roption) { //r옵션 있을 경우 삭제 질문
-		if (ask_delete() == false)		
-			return;
-	}		
+	lstat(delFilePath, &statbuf);
+	//i옵션 있으면 바로 삭제
 	if (ioption) {
 		if(S_ISDIR(statbuf.st_mode)) { //i옵션에서 디렉토리면 에러메시지
-			printf("delete: failed to delete : '%s' is Directory", delFileName);
+			printf("delete: failed to delete : '%s' is Directory", fname);
 			return;
 		}
 		else 
-			unlink(delFile); //삭제		
+			unlink(delFilePath); //삭제		
 	}
 	else { //옵션 없을 때
-		sprintf(trashFile, "%s/%s", trashfilesDir, delFileName);
-		sprintf(infoFile, "%s/%s", trashinfoDir, delFileName);
+		sprintf(trashFile, "%s/%s", trashfilesDir, fname);
+		sprintf(infoFile, "%s/%s", trashinfoDir, fname);
+		check_same_delete(trashFile); //중복 파일명이면 숫자_를 붙임
+		check_same_delete(infoFile); //중복 파일명이면 숫자_를 붙임
 
 		fp = fopen(infoFile, "w+"); //info파일 작성
-		modi = localtime(&statbuf.st_mtime);
+		localtime_r(&statbuf.st_mtime, &modi);
 		fprintf(fp, "[Trash info]\n");
-		fprintf(fp, "%s\n", delFile);
-		fprintf(fp, "D : %d-%02d-%02d %02d:%02d:%02d\n", now->tm_year+1900, now->tm_mon+1, now->tm_mday+1, now->tm_hour, now->tm_min, now->tm_sec); 
-		fprintf(fp, "M : %d-%02d-%02d %02d:%02d:%02d\n", modi->tm_year+1900, modi->tm_mon+1, modi->tm_mday+1, modi->tm_hour, modi->tm_min, modi->tm_sec); 
+		fprintf(fp, "%s\n", delFilePath);
+		fprintf(fp, "D : %04d-%02d-%02d %02d:%02d:%02d\n", now.tm_year+1900, now.tm_mon+1, now.tm_mday+1, now.tm_hour, now.tm_min, now.tm_sec); 
+		fprintf(fp, "M : %04d-%02d-%02d %02d:%02d:%02d\n", modi.tm_year+1900, modi.tm_mon+1, modi.tm_mday+1, modi.tm_hour, modi.tm_min, modi.tm_sec); 
 		fclose(fp);
 
-		if (rename(delFile, trashFile) < 0) { //trash로 이동
+		if (rename(delFilePath, trashFile) < 0) { //trash로 이동
 			fprintf(stderr, "rename error\n");
 			return;
 		}
@@ -238,8 +329,9 @@ void delete_file(void) //삭제명령어, 전역변수에 저장한 파일을 �
 int ask_delete(void) //r옵션, 삭제시 확인 문구출력 
 {
 	char ans; 
-	printf("Delete [y/n]?");
+	fprintf(stderr, "Delete [y/n]? ");
 	scanf("%c", &ans);
+	getchar();
 	getchar();
 	switch (ans) {
 		case 'y':
@@ -251,23 +343,27 @@ int ask_delete(void) //r옵션, 삭제시 확인 문구출력
 	}
 }
 
-int get_file_count(char *path, char *fname) //path에 fname포함하여 같은 파일 개수 리턴
+void check_same_delete(char *path) //path 경로의 중복파일을 체크하여 중복 시 앞에 "숫자_"를 붙임
 {
-	struct dirent **items;
-	int nitems, i, count;
+	char fname[FILELEN] = ""; 
+	char number[3];
+	char *end;
+	int num = 2;    
 
-	nitems = scandir(path, &items, NULL, alphasort);
+	end = path + strlen(path) - 1;
+	while (*(end-1) != '/')
+		--end;
+	strcpy(fname, end);
+	memset(end, 0, strlen(end)); //파일명 지우고    
+	strcat(path, "1_"); //숫자_파일명 붙이기
+	strcat(path, fname);
 
-	count = 1;
-	for (i = 0; i < nitems; i++)  
-		if (strcmp(items[i]->d_name + 2, fname) == 0)
-			count++;
-
-	for(i = 0; i < nitems; i++)
-		free(items[i]);
-	free(items);
-
-	return count;
+	while (access(path, F_OK) == 0) { //파일명이 겹칠경우
+		memset(end, 0, strlen(end));      
+		sprintf(number, "%d_", num++);
+		strcat(path, number); //파일명 앞에 "숫자_"
+		strcat(path, fname);
+	}   
 }
 
 int is_info_full(void) //info폴더가 2kb이상이면 true리턴 
@@ -293,7 +389,7 @@ void erase_old_trash(void) //info에서 가장 오래된 파일을 찾아 files�
 	for (i = 0; i < nitems; i++) {
 		char childPath[PATHLEN];
 
-		if ((!strcmp(items[i]->d_name, ".")) || (!strcmp(items[i]->d_name, "..")))
+		if (items[i]->d_name[0] == '.') //숨김파일 제외
 			continue;
 
 		sprintf(childPath, "%s/%s", trashinfoDir, items[i]->d_name); 
@@ -357,14 +453,42 @@ void cmd_size(int argc, char *argv[]) //크기 명령어 실행
 {
 	char path[PATHLEN] = "./";
 	struct stat statbuf;
+	int i = 0;
 	int limit = 0;
+	int error = false;
 
 	strcat(path, argv[2]);
+
+	//인자 에러체크
+	if (argc != 2 && argc != 4)  {
+		fprintf(stderr, "argument error\n");
+		error = true;
+	}
+
+	if (argc == 4) {
+		if(strcmp(argv[3], "-d") == 0) {
+			for(i = 0; i < strlen(argv[4]); i++)  
+				if(argv[4][i] <= '0' && '9' <= argv[4][i]) 
+					error = true;
+			if(!error)
+				limit = atoi(argv[4]);
+		}
+		else { 
+			fprintf(stderr, "option error\n");
+			error = true;
+		}
+	}
+	if(access(path, F_OK) < 0) {
+		fprintf(stderr, "There isn't %s\n", argv[2]);
+		error = true;
+	}
+
+	if(error) {
+		cmd_help();
+		return;
+	}
+
 	printf("%ld\t%s\n", get_directory_size(path), path); //최초 파일 사이즈 출력
-
-	if (argv[3] != NULL && strcmp(argv[3], "-d") == 0)
-		limit = atoi(argv[4]);
-
 	print_size(path, 0, limit);
 }
 
@@ -383,7 +507,7 @@ void print_size(char *path, int depth, int limit) //디렉토리 순회
 	for (i = 0; i < nitems; i++) { //하위 파일 출력
 		char childPath[PATHLEN];
 
-		if ((!strcmp(items[i]->d_name, ".")) || (!strcmp(items[i]->d_name, ".."))) //현재, 부모디렉토리 제외
+		if (items[i]->d_name[0] == '.') //숨김파일 제외 
 			continue;
 
 		sprintf(childPath, "%s/%s", path, items[i]->d_name);
@@ -414,7 +538,7 @@ size_t get_directory_size(char *path) //path 디렉토리 하위 파일의 합�
 	for (i = 0; i < nitems; i++) {
 		char childPath[PATHLEN];
 
-		if ((!strcmp(items[i]->d_name, ".")) || (!strcmp(items[i]->d_name, "..")))
+		if (items[i]->d_name[0] == '.') //숨김파일 제외
 			continue;
 
 		sprintf(childPath, "%s/%s", path, items[i]->d_name);
@@ -443,13 +567,26 @@ void cmd_recover(int argc, char *argv[]) //복구 명령어 실행
 	FILE *fp;
 	int count;
 
+	if(argc != 2 && argc != 3) { //인자가 맞지 않으면 에러
+		fprintf(stderr, "argument error\n");
+		cmd_help();
+		return;
+	}
+
 	strcpy(tmp, argv[2]);
 
-	if (argc == 3 && strcmp(argv[3], "-l") == 0) //l옵션일 경우
-		strcpy(fname, print_recover_question(tmp, true)); //l옵션 인자를 주어 파일 전체에서 선택
+	if (argc == 3) {
+		if(strcmp(argv[3], "-l") == 0) //l옵션일 경우
+			strcpy(fname, print_recover_question(tmp, true)); //l옵션 인자를 주어 파일 전체에서 선택
+		else { //옵션 에러
+			fprintf(stderr, "option error\n");	
+			cmd_help();
+			return;
+		}
+	}
 
 	else {
-		if ((count = get_file_count(trashfilesDir, tmp) - 1) == 0) {
+		if ((count = get_file_count(trashfilesDir, tmp)) == 0) {
 			fprintf(stderr, "There isn't <%s> file\n", argv[2]);	
 			return;
 		}
@@ -471,8 +608,12 @@ void cmd_recover(int argc, char *argv[]) //복구 명령어 실행
 	fclose(fp);
 
 	//복구 작업
+	check_same_recover(recoverPath); //복구 자리에 중복 파일이 있을 경우 파일명 수정
+	if (is_parent_dir(recoverPath) == 0) {
+		fprintf(stderr, "failed to recover: There isn't parent directory\n");
+		return;
+	}
 	unlink(info);
-	check_same(recoverPath); //복구 자리에 중복 파일이 있을 경우 파일 명 수정
 	rename(files, recoverPath);
 }
 
@@ -499,7 +640,7 @@ char *print_recover_question(char *fname, int count) //fname과 같은 이름의
 	//파일 탐색
 	for (i = 0; i < nitems; i++) {
 		char path[PATHLEN];
-		if ((!strcmp(items[i]->d_name, ".")) || (!strcmp(items[i]->d_name, ".."))) //현재, 부모디렉 토리 제외
+		if (items[i]->d_name[0] == '.') //숨김파일 제외
 			continue;
 
 		if (count > 1 && strcmp(fname, items[i]->d_name + 2) != 0)  //count가 1이 아니면 fname과 같은 파일만 체크
@@ -549,22 +690,40 @@ char *print_recover_question(char *fname, int count) //fname과 같은 이름의
 	return fname; 
 }
 
+int get_file_count(char *path, char *fname) //path에 fname과 같은 파일 개수 리턴
+{
+	struct dirent **items;
+	int nitems, i, count = 0;
+
+	nitems = scandir(path, &items, NULL, alphasort);
+
+	for (i = 0; i < nitems; i++)  
+		if (strcmp(items[i]->d_name + 2, fname) == 0)
+			count++;
+
+	for(i = 0; i < nitems; i++)
+		free(items[i]);
+	free(items);
+
+	return count;
+}
+
 void get_file_name(char *path, char *fname) //path경로에서 "숫자_"가 fname 파일 이름 리턴
 {
-    struct dirent **items;
-    int nitems, i, count;
+	struct dirent **items;
+	int nitems, i, count;
 
-    nitems = scandir(path, &items, NULL, alphasort);
+	nitems = scandir(path, &items, NULL, alphasort);
 
-    for (i = 0; i < nitems; i++)  
-        if (strcmp(items[i]->d_name + 2, fname) == 0) {
+	for (i = 0; i < nitems; i++)  
+		if (strcmp(items[i]->d_name + 2, fname) == 0) {
 			strcpy(fname, items[i]->d_name);
 			break;
 		}
 
-    for(i = 0; i < nitems; i++)
-        free(items[i]);
-    free(items);
+	for(i = 0; i < nitems; i++)
+		free(items[i]);
+	free(items);
 }
 
 void sort_by_dates_modified(char **files, int size) //files를 오래된 순으로 정렬
@@ -626,37 +785,49 @@ int select_recover_file(char **files, int size) //복구 파일 선택 질문 �
 }
 
 
-void check_same(char *path) //path 경로의 중복파일을 체크하여 중복 시 뒤에 "_숫자"를 붙임
+void check_same_recover(char *path) //path 경로의 중복파일을 체크하여 중복 시 앞에 "숫자_"를 붙임
 {
-	char extension[10] = "";
+	char fname[FILELEN] = "";
 	char number[3];
 	char *end;
 	int num = 2;	
-	
+
 	if (access(path, F_OK) == 0) {
 		end = path + strlen(path) - 1;
-		while (*end != '.' && *end != '/')
+		while (*(end-1) != '/')
 			--end;
-		if (*end == '.') { //확장자 있는 파일일 경우
-			strcpy(extension, end); //확장자 저장
-			memset(end, 0, strlen(extension)); //path에 확장자 제거 
-		}
-		else //확장자 없는 경우 end 위치 수정
-			end = path + strlen(path);
+		strcpy(fname, end);
 
-		strcat(path, "_1");
-		if(strcmp(extension, "") != 0) //확장자가 있으면 붙이기
-			strcat(path, extension); 
+		memset(end, 0, strlen(end)); //파일명 지우고	
+		strcat(path, "1_"); //숫자_파일명 붙이기
+		strcat(path, fname);
 
-		while (access(path, F_OK) == 0) { //파일 이름이 겹칠경우
-			memset(end, 0, strlen(extension) + 2);	
-			sprintf(number, "_%d", num++);
-			strcat(path, number);	
-
-			if(strcmp(extension, "") != 0) //확장자가 있으면 붙이기
-				strcat(path, extension); 
-		}
+		while (access(path, F_OK) == 0) { //파일명이 겹칠경우
+			memset(end, 0, strlen(end));	
+			sprintf(number, "%d_", num++);
+			strcat(path, number); //파일명 앞에 "숫자_"
+			strcat(path, fname);
+		}	
 	}
+}
+
+int is_parent_dir(char *path) //path경로의 부모 디렉토리가 존재하지 않으면 false 리턴 
+{
+	char tmp[PATHLEN];
+	char *end;
+	
+	strcpy(tmp, path);
+	end = tmp + strlen(tmp) - 1;
+
+	// '/'와 파일명 제거
+	while(*end != '/') 
+		*(end--) = 0;
+	*end = 0;
+	
+	if (access(tmp, F_OK) < 0) //부모 디렉토리가 존재하지 않음
+		return false;
+
+	return true;
 }
 
 void cmd_tree(int argc, char *argv[]) //트리 명령어 실행하여 디렉토리 구조 출력
@@ -681,7 +852,7 @@ void print_tree(char *path, int depth) //디렉토리 순회
 	for (i = 0; i < nitems; i++) { //하위 파일 출력
 		char childPath[PATHLEN];
 
-		if ((!strcmp(items[i]->d_name, ".")) || (!strcmp(items[i]->d_name, ".."))) //현재, 부모디렉토리 제외
+		if (items[i]->d_name[0] == '.') //숨김파일 제외
 			continue;
 
 		sprintf(childPath, "%s/%s", path, items[i]->d_name);
@@ -689,7 +860,7 @@ void print_tree(char *path, int depth) //디렉토리 순회
 
 		for(j = 0; j < depth; j++) //구조 출력
 			printf("|         ");
-		printf("|-----------%s\n",items[i]->d_name); 
+		printf("|----------%s\n",items[i]->d_name); 
 
 		if (S_ISDIR(statbuf.st_mode))  //디렉토리면 재귀
 			print_tree(childPath, depth + 1);
