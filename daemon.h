@@ -40,6 +40,7 @@ void mntr_files(char *path, FILE *fp, Llist *list); //재귀를 통해 파일현
 
 void write_log(FILE *fp, struct node *file, int status); //로그파일 작성
 void delete_until_speciData(FILE *fp, Llist *list, char *fname); //cur부터 fname 전까지 노드삭제
+void delete_remained(FILE *fp, Llist *list); //cur부터 tail까지 리스트에 남은 것 삭제
 void add_list(FILE *fp, Llist* list, char *fname); //fname을 이름으로 하는 노드 추가 
 int search_data(Llist *l, char *fname); //리스트에 fname이 있으면 true, 없으면 false 리턴
 #endif

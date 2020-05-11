@@ -25,10 +25,10 @@ int main(void)
 	strcat(mntrDir, "/check");
 	strcat(logFile, "/log.txt");
 
-	//	if(daemon_init() < 0) {
-	//		fprintf(stderr, "daemon process isn't created\n");
-	//		exit(1);
-	//	}
+	if(daemon_init() < 0) {
+		fprintf(stderr, "daemon process isn't created\n");
+		exit(1);
+	}
 
 	fp = fopen(logFile, "w+"); //log.txt파일 오픈
 	setbuf(fp, NULL);
@@ -84,6 +84,12 @@ void mntr_files(char *path, FILE *fp, Llist* list)
 
 	nitems = scandir(path, &items, NULL, alphasort); //알파벳 순서로 items에 저장
 
+	if(nitems == 2) {
+		delete_remained(fp, list);		
+		list->head = NULL;
+		return;
+	}
+
 	for (i = 0; i < nitems; i++) { //하위 파일 출력
 		char childPath[PATHLEN];
 
@@ -116,12 +122,14 @@ void mntr_files(char *path, FILE *fp, Llist* list)
 			mntr_files(childPath, fp, list);  
 	}  
 
+	delete_remained(fp, list); //리스트에 남은 것 삭제
+
 	for(i = 0; i < nitems; i++)
 		free(items[i]);
 	free(items);
 }
 
-void write_log(FILE *fp, node *file, int status)
+void write_log(FILE *fp, node *file, int status) //로그파일 작성
 {
 	char buf[BUFLEN]; 
 	char filePath[PATHLEN]; 
@@ -178,7 +186,26 @@ void delete_until_speciData(FILE *fp, Llist *list, char *fname)
 	}
 }
 
-void add_list(FILE *fp, Llist* list, char *fname)
+void delete_remained(FILE *fp, Llist *list) //cur부터 tail까지 리스트에 남은 것 삭제
+{
+	node *tmp = (node*)malloc(sizeof(node));
+
+	if(list->cur == NULL)
+		return;
+	else
+		list->tail = list->cur->prev;
+
+	while (list->cur != NULL) {
+		write_log(fp, list->cur, DELETE); //삭제 로그 기록
+		tmp = list->cur;
+		list->cur = list->cur->next;
+		free(tmp);
+	}
+	if(list->tail != NULL)
+		list->tail->next = NULL;
+}
+
+void add_list(FILE *fp, Llist* list, char *fname)//fname을 이름으로 하는 노드 추가 
 {
 	node *tmp = (node*)malloc(sizeof(node));
 	strcpy(tmp->file_name, fname);
