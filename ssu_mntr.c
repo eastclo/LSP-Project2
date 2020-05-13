@@ -47,8 +47,8 @@ void ssu_mntr()
 
 	if (access(mntrDir, F_OK) < 0) {
 		mkdir(mntrDir, 0755);	
-//		if ((pid = fork()) == 0)  //최초 실행시 모니터링을 위한 디몬 프로세스 실행
-//		execl("./daemon", "./daemon", (char*)0); //디몬 실행
+		if ((pid = fork()) == 0)  //최초 실행시 모니터링을 위한 디몬 프로세스 실행
+		execl("./daemon", "./daemon", (char*)0); //디몬 실행
 	}
 	if (access(trashDir, F_OK) < 0) 
 		mkdir(trashDir, 0755);
