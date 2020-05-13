@@ -31,5 +31,5 @@ void ssu_runtime(struct timeval *begin_t, struct timeval *end_t) //프로그램 
 	}
 
 	end_t->tv_usec -= begin_t->tv_usec;
-	printf("Runtime: %ld:%06ld(sec:usec)\n", end_t->tv_sec, end_t->tv_usec);
+	printf("Runtime: %ld:%ld:%06ld(min:sec:usec)\n", end_t->tv_sec / 60, end_t->tv_sec % 60, end_t->tv_usec);
 }

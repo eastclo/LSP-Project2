@@ -44,16 +44,17 @@ size_t get_directory_size(char *path); //디렉토리 하위 파일의 합 리�
 
 void cmd_recover(int argc, char *argv[]); //복구 명령어 실행
 char *print_recover_question(char *fname, int count); //fname과 같은 이름의 파일에서 선택한 파일명 리턴, count가 1이면 전체파일 중 선택
-int get_file_count(char *path, char *fname); //path에 fname과 같은 파일 개수 리턴
+int get_file_count(char *path, char *fname); //path(trashfiles)에 fname과 같은 파일 개수 리턴
 void get_file_name(char *path, char *fname); //path경로에서 "숫자_"가 붙은 fname파일 이름 리턴
 void sort_by_dates_modified(char **files, int size); //files를 오래된 순으로 정렬
 int get_timer_in_info(char *str); //str에서 삭제시간을 추출 후 deltime - currtime을 리턴
 int select_recover_file(char **files, int size); //복구 파일 선택 질문 후 결과 리턴
 void check_same_recover(char *path); //path 파일명이 중복이면 앞에 "숫자_"를 붙임
 int is_parent_dir(char *path); //path경로의 부모 디렉토리가 존재하지 않으면 false 리턴
+char *remove_underbar(char *fname); //파일명에 구분을 위해 붙인 숫자_ 를 제거한 파일명의 시작주소 리턴
 
 void cmd_tree(int argc, char *argv[]); //트리 명령어 실행하여 디렉토리 구조 출력 
-void print_tree(char *path, int depth); //디렉토리를 순회하며 트리 구조 출력 
+void print_tree(char *path, int depth); //디렉토리를 순회하며 트리 구조 출력
 
 void rtrim(char *_str); //문자열 끝에 개행문자 제거
 #endif
