@@ -25,10 +25,10 @@ int main(void)
 	strcat(mntrDir, "/check");
 	strcat(logFile, "/log.txt");
 
-	if(daemon_init() < 0) {
-		fprintf(stderr, "daemon process isn't created\n");
-		exit(1);
-	}
+//	if(daemon_init() < 0) {
+//		fprintf(stderr, "daemon process isn't created\n");
+//		exit(1);
+//	}
 
 	fp = fopen(logFile, "w+"); //log.txt파일 오픈
 	setbuf(fp, NULL);
@@ -41,6 +41,7 @@ int main(void)
 	while (1) {
 		list->cur = list->head;
 		mntr_files(mntrDir, fp, list);	
+		delete_remained(fp, list);
 		usleep(500);
 	}
 	exit(0);
@@ -84,12 +85,6 @@ void mntr_files(char *path, FILE *fp, Llist* list)
 
 	nitems = scandir(path, &items, NULL, alphasort); //알파벳 순서로 items에 저장
 
-	if(nitems == 2) {
-		delete_remained(fp, list);		
-		list->head = NULL;
-		return;
-	}
-
 	for (i = 0; i < nitems; i++) { //하위 파일 출력
 		char childPath[PATHLEN];
 
@@ -121,8 +116,6 @@ void mntr_files(char *path, FILE *fp, Llist* list)
 		if (S_ISDIR(statbuf.st_mode)) //디렉토리면 재귀
 			mntr_files(childPath, fp, list);  
 	}  
-
-	delete_remained(fp, list); //리스트에 남은 것 삭제
 
 	for(i = 0; i < nitems; i++)
 		free(items[i]);
@@ -192,7 +185,11 @@ void delete_remained(FILE *fp, Llist *list) //cur부터 tail까지 리스트에 
 
 	if(list->cur == NULL)
 		return;
-	else
+	else if (list ->cur->prev == NULL) {
+		list->tail = NULL;
+		list->head = NULL;
+	}
+	else 
 		list->tail = list->cur->prev;
 
 	while (list->cur != NULL) {
