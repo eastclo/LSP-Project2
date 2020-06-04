@@ -25,10 +25,10 @@ int main(void)
 	strcat(mntrDir, "/check");
 	strcat(logFile, "/log.txt");
 
-//	if(daemon_init() < 0) {
-//		fprintf(stderr, "daemon process isn't created\n");
-//		exit(1);
-//	}
+	if(daemon_init() < 0) {
+		fprintf(stderr, "daemon process isn't created\n");
+		exit(1);
+	}
 
 	fp = fopen(logFile, "w+"); //log.txt파일 오픈
 	setbuf(fp, NULL);
